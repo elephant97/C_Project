@@ -17,19 +17,19 @@ void main()
 
 char *a(char *ver_tmp) //for문으로 제거 로직
 {
-        int i;
+    int i;
 
-        for(i=0; i < strlen(ver_tmp); i++)
+    for(i=0; i < strlen(ver_tmp); i++)
+    {
+       if(ver_tmp[i] == '.')
         {
-                if(ver_tmp[i] == '.')
-                {
-                        strcpy(&ver_tmp[i], &ver_tmp[i+1]);
-                }
+            strcpy(&ver_tmp[i], &ver_tmp[i+1]);
         }
+    }
 
-        printf("finish=[%s]\n",ver_tmp);
+    printf("finish=[%s]\n",ver_tmp);
 
-        return ver_tmp;
+    return ver_tmp;
 }
 
 char *b(char *ver_tmp) //숫자 정수화 및 strtok_r을 통한 제거 로직
