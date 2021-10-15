@@ -4,15 +4,15 @@
 #include <mysql.h>
 
 
-#define MYSQL_CHAR		MYSQL_TYPE_TINY		//length 1 
-#define MYSQL_SHORT		MYSQL_TYPE_SHORT	//length 2 small int
-#define MYSQL_INT		MYSQL_TYPE_LONG		//length 2 small int
-#define MYSQL_LONG		MYSQL_TYPE_LONG		//length 4 integer
-#define MYSQL_LONGLOGN	MYSQL_TYPE_LONGLONG	//length 8 
-#define MYSQL_FLOAT		MYSQL_TYPE_FLOAT	//length 4
-#define MYSQL_DOUBLE	MYSQL_TYPE_DOUBLE	//length 8
-#define MYSQL_STRING	MYSQL_TYPE_STRING	//length data length
-#define MYSQL_TEXT		MYSQL_TYPE_BLOB		//length data length
+#define MYSQL_CHAR		MYSQL_TYPE_TINY		
+#define MYSQL_SHORT		MYSQL_TYPE_SHORT	
+#define MYSQL_INT		MYSQL_TYPE_LONG		
+#define MYSQL_LONG		MYSQL_TYPE_LONG		
+#define MYSQL_LONGLOGN	MYSQL_TYPE_LONGLONG	
+#define MYSQL_FLOAT		MYSQL_TYPE_FLOAT	
+#define MYSQL_DOUBLE	MYSQL_TYPE_DOUBLE	
+#define MYSQL_STRING	MYSQL_TYPE_STRING	
+#define MYSQL_TEXT		MYSQL_TYPE_BLOB		
 
 #define MYSQL_NULL_Y	1 //If Y, the value is binding to NULL.
 #define MYSQL_NULL_N	0 //Use N if the binding value is not NULL.
@@ -20,9 +20,27 @@
 #define FAILURE         (-1)
 #define SUCCESS         0
 
-int mys_bind_param(MYSQL_BIND *bind, int Sequence, void *valuep, int data_type,  unsigned long *size, int null_bind_yn)
+#define STRING_SIZE
+
+typedef struct mysql_bind_st
+{
+	unsigned long mysql_null;
+	unsigned long str_data_size;
+	
+}MYSQL_STRING_BIND_ST;
+
+int mys_bind_param(MYSQL_BIND *bind, int Sequence, void *valuep, MYSQL_STRING_BIND_ST *user,  int data_type,  int null_bind_yn)
 {
     unsigned long str_length = 0;
+   
+	if(null_bind_yn == MYSQL_NULL_Y)
+	{
+		user[Sequence].mysql_null = 1;
+	}
+	else
+	{
+		user[Sequence].mysql_null = 0;
+	}
 
 	if(data_type == MYSQL_STRING || data_type == MYSQL_CHAR || data_type == MYSQL_TEXT)
 	{
@@ -30,9 +48,9 @@ int mys_bind_param(MYSQL_BIND *bind, int Sequence, void *valuep, int data_type, 
 		bind[Sequence].buffer_type= data_type;
 		// bind[Sequence].buffer= (char *) test;
 		bind[Sequence].buffer= (char *) valuep;
-		bind[Sequence].buffer_length= sizeof(valuep);
-		bind[Sequence].is_null= null_bind_yn;
-		bind[Sequence].length= size;
+		bind[Sequence].buffer_length= (unsigned long)sizeof(valuep);
+		bind[Sequence].is_null= &user[Sequence].mysql_null;
+		bind[Sequence].length= &user[Sequence].str_data_size;
 	}
 	else
 	{
@@ -41,7 +59,7 @@ int mys_bind_param(MYSQL_BIND *bind, int Sequence, void *valuep, int data_type, 
 		bind[Sequence].buffer_type= data_type;
 		bind[Sequence].buffer = (char *) valuep;
 		bind[Sequence].is_null= null_bind_yn;
-		bind[Sequence].length= size;
+		bind[Sequence].length= &user[Sequence].str_data_size;
 
 	}
 
@@ -90,10 +108,11 @@ int mysql_send_query(MYSQL *conn)
     MYSQL_STMT	*stmt;
 	MYSQL_BIND	*bind = NULL;
     char insert_query[2000]="INSERT INTO test_table(col1,col2,col3) VALUES(?,?,?)";
-    unsigned long str_data_size=0;
     int param_count = 0;
     int integer = 10;
 	int short_test = 1000;
+    char str_data[STRING_SIZE]={0,};
+    MYSQL_STRING_BIND_ST *user = NULL; //binding해야 할 string의 개수대로 malloc해서 사용
 
     stmt = mysql_stmt_init(conn);
     
@@ -114,13 +133,16 @@ int mysql_send_query(MYSQL *conn)
     if(param_count > 0)
     {
         bind = (MYSQL_BIND *)malloc(sizeof(MYSQL_BIND) * param_count);
+        user = (MYSQL_STRING_BIND_ST *)malloc(sizeof(MYSQL_STRING_BIND_ST) * param_count);
         memset(bind, 0X00, sizeof(MYSQL_BIND)*param_count);
+        memset(user, 0X00, sizeof(MYSQL_STRING_BIND_ST)*param_count);
+
     }
     
-    mys_bind_param(bind, 0, (void *) &integer, MYSQL_INT, 0, MYSQL_NULL_N);
-    str_data_size=0;
-    mys_bind_param(bind, 1, (void *) v_recv, MYSQL_STRING, &str_data_size, MYSQL_NULL_N);
-    mys_bind_param(bind, 2, (void *) &short_test, MYSQL_SHORT, 0, MYSQL_NULL_N);
+    mys_bind_param(bind, 0, (void *) &integer, user, MYSQL_INT, MYSQL_NULL_N);
+    strncpy(str_data,"MYSQL",STRING_SIZE);
+    mys_bind_param(bind, 1, (void *) str_data, user, MYSQL_STRING, MYSQL_NULL_N);
+    mys_bind_param(bind, 2, (void *) &short_test, user,MYSQL_SHORT, MYSQL_NULL_N);
 
     if (mysql_stmt_bind_param(stmt, bind))
     {
