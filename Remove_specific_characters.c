@@ -3,7 +3,7 @@
 
 char *a(char *ver_tmp);
 char *b(char *ver_tmp);
-char *c(char *ver_tmp);
+
 
 void main()
 {
@@ -15,7 +15,7 @@ void main()
         b_result=b(ver_temp1);
 }
 
-char *a(char *ver_tmp) //for¹®À¸·Î Á¦°Å ·ÎÁ÷
+char *a(char *ver_tmp) //forë¬¸ìœ¼ë¡œ ì œê±° ë¡œì§
 {
     int i;
 
@@ -32,7 +32,7 @@ char *a(char *ver_tmp) //for¹®À¸·Î Á¦°Å ·ÎÁ÷
     return ver_tmp;
 }
 
-char *b(char *ver_tmp) //¼ıÀÚ Á¤¼öÈ­ ¹× strtok_rÀ» ÅëÇÑ Á¦°Å ·ÎÁ÷
+char *b(char *ver_tmp) //ìˆ«ì ì •ìˆ˜í™” ë° strtok_rì„ í†µí•œ ì œê±° ë¡œì§
 {
     int *num_tmp[10] = {0, };
     char *num_cut=NULL;
