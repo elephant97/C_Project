@@ -5,12 +5,16 @@
 
 
 
-
 #define xfree(p)		do {if(p != NULL){free(p); p=NULL;}} while(0)
 #define F_OK                 0
 
 #define FAILED               (-1)
 #define SUCCESS              0
+
+#ifndef TRUE
+#define TRUE 1
+#define FALSE 0
+#endif
 
 
 //module type set
@@ -157,7 +161,7 @@ void getModuleName(int argc, char **argv);
 int getModuleCodeExtrac(char *module_name);
 // void selectCategory(char *filename, int *category);
 void selectCategory(char *filename, char *category);
-int logConvertTask(char *filename, char *category);
+int logConvertTask(char *filename, char *category, int status);
 FILE_LIST *findCFile(int *file_cnt);
 int LogSet(char *contents, int status, char *category, char *logcode, int levelnum);
 // int infoLogSet(char *contents, int status, char *category, char *logcode);
@@ -195,7 +199,20 @@ int main(int argc, char **argv)
         {
             exit(0);
         }
-        logConvertTask(file_list[i].file_name, category);
+        logConvertTask(file_list[i].file_name, category, OLD);
+    }
+
+    for(i = 0; i < file_cnt; i++)
+    {
+        printf("##[%d]\n",__LINE__);
+        printf("##%s\n",file_list[i].file_name);
+        selectCategory(file_list[i].file_name, category);
+        printf("##[%d]\n",__LINE__);
+        if(logConvertDir() != SUCCESS)
+        {
+            exit(0);
+        }
+        logConvertTask(file_list[i].file_name, category, NEW);
     }
 
     for(i = 0; i < 3; i++)
@@ -217,8 +234,8 @@ int logMerge(int num)
     FILE *readfile_fd;
 
 
-    sprintf(logtext_path, "%s\\%s",g_module_path,LEVEL_LIST[num].log_level_text);
-    sprintf(maintext_path, "%s\\LOG_TEXT.txt",g_module_path);
+    sprintf(logtext_path, "%s\\logConvert\\%s",g_module_path,LEVEL_LIST[num].log_level_text);
+    sprintf(maintext_path, "%s\\logConvert\\LOG_TEXT.txt",g_module_path);
     sprintf(division, "MODULE:%d_%s\t\n",g_module_code,LEVEL_LIST[num].level_name);
     if(access(logtext_path, F_OK) == 0)
     {
@@ -246,7 +263,11 @@ int logMerge(int num)
 
     }
 
-    return ;
+    fclose(readfile_fd);
+    fclose(mainfile_fd);
+
+
+    return;
 }
 
 int logConvertDir()
@@ -294,7 +315,7 @@ void selectCategory(char *filename, char *category)
     printf("##category[%c]\n",category[0]);
 }
 
-int logConvertTask(char *filename, char *category)
+int logConvertTask(char *filename, char *category, int status)
 {
     char full_path[1024+1] = {0,};
     char new_full_path[1024+1] = {0,};
@@ -312,148 +333,158 @@ int logConvertTask(char *filename, char *category)
     sprintf(full_path, "%s\\%s",g_module_path,filename);
 
     //OLD LOG LOAD
-    target_fd = fopen(full_path, "r+");
-    if(target_fd == NULL)
+    if(status == OLD)
     {
-        printf("file open failed[%s]\n",full_path);
-        return FAILED;
-    }
-
-    while(fgets(buf, 512, target_fd) != NULL)
-    {
-        if(buf[0] == '\0') continue;
-
-        strcpy(temp,buf);
-        ltrim(temp);
-        tok = strtok_s(temp, "\"", &saveptr);
-        tok = strtok_s(NULL, "\"", &saveptr);
-        if(tok == NULL) continue;
-        printf("##tok[%s]\n",tok);
-        ltrim(tok);
-        printf("##tok[%s]\n",tok);
-
-        if(memcmp(temp, "SHP_LOG_ERROR", 13) == 0)
+        target_fd = fopen(full_path, "r+");
+        if(target_fd == NULL)
         {
-            if(LogSet(tok, OLD, category, " ", ERROR) == 2) continue;
-        }
-        else if(memcmp(temp, "SHP_LOG_INFO", 12) == 0)
-        {
-            if(LogSet(tok, OLD, category, " ", INFO) == 2) continue;
-        }
-        else if(memcmp(temp, "SHP_LOG_WARN", 12) == 0)
-        {
-           if(LogSet(tok, OLD, category, " ", WARN) == 2) continue;
+            printf("file open failed[%s]\n",full_path);
+            return FAILED;
         }
 
-    }
-    fclose(target_fd);
-    
-    //NEW LOG LOAD
-    sprintf(new_full_path,"%s\\%s",backup_dir, filename);
-    target_fd = fopen(full_path, "r");
-    write_fd = fopen(new_full_path, "w");
-    if(target_fd == NULL)
-    {
-        printf("file open failed[%s]\n",full_path);
-        return FAILED;
-    }
-    if(write_fd == NULL)
-    {
-        printf("file open failed[%s]\n",full_path);
+        while(fgets(buf, 512, target_fd) != NULL)
+        {
+            if(buf[0] == '\0') continue;
+
+            strcpy(temp,buf);
+            ltrim(temp);
+            tok = strtok_s(temp, "\"", &saveptr);
+            tok = strtok_s(NULL, "\"", &saveptr);
+            if(tok == NULL) continue;
+            printf("##tok[%s]\n",tok);
+            ltrim(tok);
+            printf("##tok[%s]\n",tok);
+
+            if(memcmp(temp, "SHP_LOG_ERROR", 13) == 0)
+            {
+                if(LogSet(tok, OLD, category, " ", ERROR) == 2) continue;
+            }
+            else if(memcmp(temp, "SHP_LOG_INFO", 12) == 0)
+            {
+                if(LogSet(tok, OLD, category, " ", INFO) == 2) continue;
+            }
+            else if(memcmp(temp, "SHP_LOG_WARN", 12) == 0)
+            {
+               if(LogSet(tok, OLD, category, " ", WARN) == 2) continue;
+            }
+
+        }
         fclose(target_fd);
-        return FAILED;
+        printf("old log get finished[%s]\n",filename);
     }
-
-    while(fgets(buf, 512, target_fd) != NULL)
+    else if(status == NEW) //NEW LOG LOAD
     {
-        memset(logcode,0x00,sizeof(logcode));
-        memset(new_buf,0x00,sizeof(new_buf));
-
-        if(buf[0] == '\0') continue;
-
-        strcpy(temp,buf);
-        ltrim(temp);
-        printf("temp[%s]\n",temp);
-       
-
-        if(memcmp(temp, "SHP_LOG_ERROR", 13) == 0)
+        sprintf(new_full_path,"%s\\%s",backup_dir, filename);
+        target_fd = fopen(full_path, "r");
+        write_fd = fopen(new_full_path, "w");
+        if(target_fd == NULL)
         {
-            tok = strtok_s(temp, "\"", &saveptr);
-            tok = strtok_s(NULL, "\"", &saveptr);
-            if(tok == NULL)
+            printf("file open failed[%s]\n",full_path);
+            return FAILED;
+        }
+        if(write_fd == NULL)
+        {
+            printf("file open failed[%s]\n",full_path);
+            fclose(target_fd);
+            return FAILED;
+        }
+
+        while(fgets(buf, 512, target_fd) != NULL)
+        {
+            memset(logcode,0x00,sizeof(logcode));
+            memset(new_buf,0x00,sizeof(new_buf));
+
+            if(buf[0] == '\0') continue;
+
+            strcpy(temp,buf);
+            ltrim(temp);
+            printf("temp[%s]\n",temp);
+
+
+            if(memcmp(temp, "SHP_LOG_ERROR", 13) == 0)
             {
-                 fputs(buf,write_fd);
-                 continue;
+                tok = strtok_s(temp, "\"", &saveptr);
+                tok = strtok_s(NULL, "\"", &saveptr);
+                if(tok == NULL)
+                {
+                     fputs(buf,write_fd);
+                     continue;
+                }
+                ltrim(tok);
+                printf("##tok[%s]\n",tok);
+                if(LogSet(tok, NEW, category, logcode, ERROR) == 2)
+                {
+                    fputs(buf,write_fd);
+                    continue;
+                }
             }
-            ltrim(tok);
-            printf("##tok[%s]\n",tok);
-            if(LogSet(tok, NEW, category, logcode, ERROR) == 2)
+            else if(memcmp(temp, "SHP_LOG_INFO", 12) == 0)
+            {
+                tok = strtok_s(temp, "\"", &saveptr);
+                tok = strtok_s(NULL, "\"", &saveptr);
+                if(tok == NULL)
+                {
+                     fputs(buf,write_fd);
+                     continue;
+                }
+                ltrim(tok);
+                printf("##tok[%s]\n",tok);
+                if(LogSet(tok, NEW, category, logcode, INFO) == 2) 
+                {
+                    fputs(buf,write_fd);
+                    continue;
+                }
+            }
+            else if(memcmp(temp, "SHP_LOG_WARN", 12) == 0)
+            {
+                tok = strtok_s(temp, "\"", &saveptr);
+                tok = strtok_s(NULL, "\"", &saveptr);
+                if(tok == NULL)
+                {
+                     fputs(buf,write_fd);
+                     continue;
+                }
+                ltrim(tok);
+                printf("##tok[%s]\n",tok);
+                if(LogSet(tok, NEW, category, logcode ,WARN) == 2) 
+                {
+                    fputs(buf,write_fd);
+                    continue;
+                }
+            }
+            else
             {
                 fputs(buf,write_fd);
                 continue;
             }
-        }
-        else if(memcmp(temp, "SHP_LOG_INFO", 12) == 0)
-        {
-            tok = strtok_s(temp, "\"", &saveptr);
-            tok = strtok_s(NULL, "\"", &saveptr);
-            if(tok == NULL)
-            {
-                 fputs(buf,write_fd);
-                 continue;
-            }
-            ltrim(tok);
-            printf("##tok[%s]\n",tok);
-            if(LogSet(tok, NEW, category, logcode, INFO) == 2) 
-            {
-                fputs(buf,write_fd);
-                continue;
-            }
-        }
-        else if(memcmp(temp, "SHP_LOG_WARN", 12) == 0)
-        {
-            tok = strtok_s(temp, "\"", &saveptr);
-            tok = strtok_s(NULL, "\"", &saveptr);
-            if(tok == NULL)
-            {
-                 fputs(buf,write_fd);
-                 continue;
-            }
-            ltrim(tok);
-            printf("##tok[%s]\n",tok);
-            if(LogSet(tok, NEW, category, logcode ,WARN) == 2) 
-            {
-                fputs(buf,write_fd);
-                continue;
-            }
-        }
-        else
-        {
-            fputs(buf,write_fd);
-            continue;
-        }
 
-        printf("##buf[%s]\n",buf);
-        if((ptr = strstr(buf,tok)) != NULL)
-        {
             printf("##buf[%s]\n",buf);
-            tok2 = strtok_s(buf, "\"", &saveptr2);
-                   strtok_s(NULL, "\"", &saveptr2);
-            sprintf(new_buf,"%s\"%s\"%s",tok2,logcode,saveptr2);
-            printf("newbuf[%s]\n",new_buf);
-            fputs(new_buf,write_fd);
-            printf("##[%d]\n",__LINE__);
-        }
-        else
-        {
-            printf("lost line ERROR!\n");
-            break;
-        }
+            if((ptr = strstr(buf,tok)) != NULL)
+            {
+                printf("##buf[%s]\n",buf);
+                tok2 = strtok_s(buf, "\"", &saveptr2);
+                       strtok_s(NULL, "\"", &saveptr2);
+                sprintf(new_buf,"%s\"%s\"%s",tok2,logcode,saveptr2);
+                printf("newbuf[%s]\n",new_buf);
+                fputs(new_buf,write_fd);
+                printf("##[%d]\n",__LINE__);
+            }
+            else
+            {
+                printf("lost line ERROR!\n");
+                break;
+            }
 
+        }
+        fclose(write_fd);
+        fclose(target_fd);
+        printf("new log get finished[%s]\n",filename);
     }
-
-    fclose(write_fd);
-    fclose(target_fd);
+    else
+    {
+        printf("UNKOWN STATUS[%d]\n", status);
+    }
+    
 }
 
 void ltrim(char *src)
@@ -519,7 +550,7 @@ int LogSet(char *contents, int status, char *category, char *logcode, int leveln
 
     
 
-    sprintf(logtxt_path,"%s\\%s",g_module_path,LEVEL_LIST[levelnum].log_level_text);
+    sprintf(logtxt_path,"%s\\logConvert\\%s",g_module_path,LEVEL_LIST[levelnum].log_level_text);
     logtxt_fd = fopen(logtxt_path, "a");
     if(logtxt_fd == NULL)
     {
@@ -868,8 +899,12 @@ FILE_LIST* findCFile(int *file_cnt)
     int result = 1;
     int i = 0;
     char getsource_path[1024+1]={0,};
+    int pc_exist_yn = FALSE;
+    char pc_file_name[128+1] = {0,};
+
     printf("##[%d]\n",__LINE__);
 
+    // C file find
     sprintf(getsource_path,"%s\\*.c",g_module_path);
     handle = _findfirst(getsource_path, &fd);
     if(handle == FAILED) 
@@ -890,9 +925,35 @@ FILE_LIST* findCFile(int *file_cnt)
         }
         result = _findnext(handle, &fd);
     }
-    printf("##[%d]\n",__LINE__);
     _findclose(handle);	
+
+    // PC file find
+    result = 1;
+    sprintf(getsource_path,"%s\\*.pc",g_module_path);
+    handle = _findfirst(getsource_path, &fd);
+    if(handle == FAILED) 
+	{
+		printf("_findfirst error [%s]\n",getsource_path);
+		_findclose(handle);	 	 
+		return NULL;
+	}
     printf("##[%d]\n",__LINE__);
+    while(result != FAILED)
+    {
+        printf("fine_source[%s]\n",fd.name);
+        if(strcmp(fd.name,"shp_db_proc.c") != 0)
+        {
+            printf("fine_source[%s]\n",fd.name);
+            pc_exist_yn = TRUE;
+            sprintf(pc_file_name,"%s",fd.name);
+            printf("pc_file_name [%s,%s]\n",pc_file_name,fd.name);
+            Sleep(1);
+            (*file_cnt)++;
+            printf("file_cnt%d\n",*file_cnt);
+        }
+        result = _findnext(handle, &fd);
+    }
+    _findclose(handle);	
    
     file_list = (FILE_LIST *)malloc(sizeof(FILE_LIST) * (*file_cnt));
     if(file_list == NULL)
@@ -903,6 +964,16 @@ FILE_LIST* findCFile(int *file_cnt)
      printf("##[%d]\n",__LINE__);
     memset(file_list, 0x00, sizeof(FILE_LIST)* (*file_cnt));
 
+
+    if(pc_exist_yn == TRUE)
+    {
+        strcpy(file_list[i].file_name, pc_file_name);
+        printf("file_list[i].file_name [%s,%s]\n",pc_file_name,file_list[i].file_name);
+        Sleep(1);
+        i++;
+    }
+
+    sprintf(getsource_path,"%s\\*.c",g_module_path);
     handle = _findfirst(getsource_path, &fd);
     if(handle == FAILED) 
 	{
@@ -912,7 +983,7 @@ FILE_LIST* findCFile(int *file_cnt)
 		return NULL;
 	}
      printf("##[%d]\n",__LINE__);
-     result = 1;
+    result = 1;
     while(result != FAILED)
     {
         printf("list1 %s\n",fd.name);
@@ -925,7 +996,6 @@ FILE_LIST* findCFile(int *file_cnt)
         result = _findnext(handle, &fd);
     }
     _findclose(handle);
-     printf("##[%d]\n",__LINE__);
     return file_list;
 }
 
